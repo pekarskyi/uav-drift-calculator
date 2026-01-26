@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор дрейфу БПЛА</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: #fff;
+            padding: 15px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+            color: #60a5fa;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            font-size: 0.95em;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .card h2 {
+            font-size: 1.1em;
+            margin-bottom: 12px;
+            color: #60a5fa;
+        }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-group label {
+            font-size: 0.85em;
+            margin-bottom: 5px;
+            color: #cbd5e1;
+        }
+
+        input[type="number"] {
+            padding: 8px 10px;
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 1em;
+            transition: border-color 0.2s;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+
+        .hint {
+            font-size: 0.75em;
+            color: #94a3b8;
+            margin-top: 3px;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+            border: 1px solid #3b82f6;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .result-box h2 {
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 10px;
+            background: rgba(30, 58, 138, 0.4);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+        }
+
+        .result-value {
+            font-weight: bold;
+            color: #fbbf24;
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 10px;
+            border: 2px solid #334155;
+        }
+
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 0.85em;
+            color: #cbd5e1;
+        }
+
+        .coords-display {
+            background: rgba(15, 23, 42, 0.7);
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 0.85em;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.5em;
+            }
+            
+            .input-row {
+                grid-template-columns: 1fr;
+            }
+
+            #map {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛸 Калькулятор дрейфу БПЛА</h1>
+            <p class="subtitle">Розрахунок зносу дрона вітром з картою</p>
+        </header>
+
+        <!-- Вхідні дані -->
+        <div class="card">
+            <h2>📝 Вхідні дані</h2>
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="windDir">Напрямок вітру (Ai°)</label>
+                    <input type="number" id="windDir" min="0" max="360" value="90">
+                    <div class="hint" id="windDirHint">Дме зі Сходу → на Захід</div>
+                </div>
+                <div class="input-group">
+                    <label for="windSpeed">Швидкість вітру (м/с)</label>
+                    <input type="number" id="windSpeed" min="0" max="50" step="0.1" value="5">
+                    <div class="hint" id="windSpeedHint">Помірний</div>
+                </div>
+                <div class="input-group">
+                    <label for="battery">Заряд батареї (%)</label>
+                    <input type="number" id="battery" min="0" max="100" value="100">
+                    <div class="hint" id="batteryHint">Час польоту: 36.0 хв</div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- Результати -->
+        <div class="result-box">
+            <h2>📊 Результати дрейфу</h2>
+            <div id="results"></div>
+            <div class="coords-display" id="coordsDisplay"></div>
+        </div>
+
+        <!-- Карта -->
+        <div class="card">
+            <h2>🗺️ Карта дрейфу</h2>
+            <div id="map"></div>
+            <div class="info-box" style="margin-top: 10px;">
+                💡 Клікніть на карті, щоб вказати початкову точку польоту
+            </div>
+        </div>
+
+        <div class="info-box">
+            ℹ️ Метеорологічний напрямок показує ЗВІДКИ дме вітер. Вітер 90° дме ЗІ Сходу НА Захід.
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const MAX_FLIGHT_TIME = 36;
+
+        const elements = {
+            windDir: document.getElementById('windDir'),
+            windSpeed: document.getElementById('windSpeed'),
+            battery: document.getElementById('battery')
+        };
+
+        // Ініціалізація карти (центр України)
+        const map = L.map('map').setView([49.0, 31.5], 6);
+        
+        // Базові шари
+        const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        });
+
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri',
+            maxZoom: 19
+        });
+
+        const hybrid = L.layerGroup([
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles © Esri',
+                maxZoom: 19
+            }),
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
+                attribution: '© CARTO',
+                maxZoom: 19,
+                opacity: 0.8
+            })
+        ]);
+
+        // Додаємо hybrid за замовчуванням
+        hybrid.addTo(map);
+
+        // Контроль шарів
+        const baseMaps = {
+            "🛰️ Супутник + підписи": hybrid,
+            "🛰️ Супутник": satellite,
+            "🗺️ Карта": streets
+        };
+
+        L.control.layers(baseMaps).addTo(map);
+
+        let startMarker = null;
+        let endMarker = null;
+        let driftLine = null;
+        let windArrow = null;
+        let startLatLng = null;
+
+        function getWindDirection(deg) {
+            const directions = [
+                { angle: 0, from: 'Північ', to: 'Південь', arrow: '↓' },
+                { angle: 45, from: 'Пн-Сх', to: 'Пд-Зх', arrow: '↙' },
+                { angle: 90, from: 'Схід', to: 'Захід', arrow: '←' },
+                { angle: 135, from: 'Пд-Сх', to: 'Пн-Зх', arrow: '↖' },
+                { angle: 180, from: 'Південь', to: 'Північ', arrow: '↑' },
+                { angle: 225, from: 'Пд-Зх', to: 'Пн-Сх', arrow: '↗' },
+                { angle: 270, from: 'Захід', to: 'Схід', arrow: '→' },
+                { angle: 315, from: 'Пн-Зх', to: 'Пд-Сх', arrow: '↘' },
+                { angle: 360, from: 'Північ', to: 'Південь', arrow: '↓' }
+            ];
+
+            for (let i = 0; i < directions.length - 1; i++) {
+                if (deg >= directions[i].angle && deg < directions[i + 1].angle) {
+                    if (Math.abs(deg - directions[i].angle) < Math.abs(deg - directions[i + 1].angle)) {
+                        return directions[i];
+                    } else {
+                        return directions[i + 1];
+                    }
+                }
+            }
+            return directions[0];
+        }
+
+        function getWindDescription(speed) {
+            if (speed < 2) return 'Слабкий';
+            if (speed < 6) return 'Помірний';
+            if (speed < 11) return 'Сильний';
+            if (speed < 17) return 'Дуже сильний';
+            return 'Штормовий';
+        }
+
+        function updateValues() {
+            const windDir = Number(elements.windDir.value);
+            const windSpeed = Number(elements.windSpeed.value);
+            const battery = Number(elements.battery.value);
+            
+            const windInfo = getWindDirection(windDir);
+            document.getElementById('windDirHint').textContent = `Дме з ${windInfo.from} ${windInfo.arrow} на ${windInfo.to}`;
+            document.getElementById('windSpeedHint').textContent = getWindDescription(windSpeed);
+            
+            const flightTime = (battery / 100) * MAX_FLIGHT_TIME;
+            document.getElementById('batteryHint').textContent = `Час польоту: ${flightTime.toFixed(1)} хв`;
+            
+            calculate();
+        }
+
+        function calculate() {
+            const windDir = Number(elements.windDir.value);
+            const windSpeed = Number(elements.windSpeed.value);
+            const battery = Number(elements.battery.value);
+
+            const availableTime = (battery / 100) * MAX_FLIGHT_TIME;
+            const driftDistance = windSpeed * availableTime * 60; // метрів
+            const driftDirection = (windDir + 180) % 360;
+
+            displayResults({
+                driftDistance,
+                driftDirection,
+                availableTime,
+                windSpeed
+            });
+
+            if (startLatLng) {
+                updateMapMarkers(driftDistance, driftDirection, windDir);
+            }
+        }
+
+        function displayResults(data) {
+            const driftDir = getWindDirection(data.driftDirection);
+            
+            const resultsHTML = `
+                <div class="result-item">
+                    <span>Дрейф за ${data.availableTime.toFixed(1)} хв:</span>
+                    <span class="result-value">${data.driftDistance.toFixed(0)} м (${(data.driftDistance / 1000).toFixed(2)} км)</span>
+                </div>
+                <div class="result-item">
+                    <span>Напрямок дрейфу (Ai):</span>
+                    <span class="result-value">${data.driftDirection}°</span>
+                </div>
+                <div class="result-item">
+                    <span>Швидкість дрейфу:</span>
+                    <span class="result-value">${data.windSpeed.toFixed(1)} м/с</span>
+                </div>
+            `;
+            document.getElementById('results').innerHTML = resultsHTML;
+        }
+
+        function calculateEndPoint(startLat, startLng, distance, bearing) {
+            const R = 6371000; // Радіус Землі в метрах
+            const lat1 = startLat * Math.PI / 180;
+            const lon1 = startLng * Math.PI / 180;
+            const brng = bearing * Math.PI / 180;
+            
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distance / R) +
+                        Math.cos(lat1) * Math.sin(distance / R) * Math.cos(brng));
+            
+            const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distance / R) * Math.cos(lat1),
+                                 Math.cos(distance / R) - Math.sin(lat1) * Math.sin(lat2));
+            
+            return {
+                lat: lat2 * 180 / Math.PI,
+                lng: lon2 * 180 / Math.PI
+            };
+        }
+
+        function updateMapMarkers(driftDistance, driftDirection, windDir) {
+            // Видаляємо старі маркери
+            if (endMarker) map.removeLayer(endMarker);
+            if (driftLine) map.removeLayer(driftLine);
+            if (windArrow) map.removeLayer(windArrow);
+
+            // Розраховуємо кінцеву точку
+            const endPoint = calculateEndPoint(
+                startLatLng.lat,
+                startLatLng.lng,
+                driftDistance,
+                driftDirection
+            );
+
+            // Кінцевий маркер
+            endMarker = L.marker([endPoint.lat, endPoint.lng], {
+                icon: L.divIcon({
+                    className: 'custom-icon',
+                    html: '<div style="background: #ef4444; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white;"></div>',
+                    iconSize: [20, 20]
+                })
+            }).addTo(map).bindPopup(`<b>Кінцева точка після дрейфу</b><br>
+                Lat: ${endPoint.lat.toFixed(6)}<br>
+                Lng: ${endPoint.lng.toFixed(6)}`);
+
+            // Лінія дрейфу
+            driftLine = L.polyline([
+                [startLatLng.lat, startLatLng.lng],
+                [endPoint.lat, endPoint.lng]
+            ], {
+                color: '#f59e0b',
+                weight: 3,
+                opacity: 0.8
+            }).addTo(map);
+
+            // Стрілка вітру (коротка, показує звідки дме)
+            const windPoint = calculateEndPoint(
+                startLatLng.lat,
+                startLatLng.lng,
+                Math.min(driftDistance * 0.3, 500),
+                windDir
+            );
+
+            windArrow = L.polyline([
+                [startLatLng.lat, startLatLng.lng],
+                [windPoint.lat, windPoint.lng]
+            ], {
+                color: '#06b6d4',
+                weight: 2,
+                opacity: 0.7,
+                dashArray: '8, 4'
+            }).addTo(map);
+
+            // Оновлюємо відображення координат
+            document.getElementById('coordsDisplay').innerHTML = `
+                <strong>Початкова точка:</strong> ${startLatLng.lat.toFixed(6)}, ${startLatLng.lng.toFixed(6)}<br>
+                <strong>Кінцева точка:</strong> ${endPoint.lat.toFixed(6)}, ${endPoint.lng.toFixed(6)}
+            `;
+
+            // Підганяємо масштаб карти
+            map.fitBounds([
+                [startLatLng.lat, startLatLng.lng],
+                [endPoint.lat, endPoint.lng]
+            ], { padding: [50, 50] });
+        }
+
+        // Обробник кліку на карті
+        map.on('click', function(e) {
+            startLatLng = e.latlng;
+            
+            // Видаляємо старий стартовий маркер
+            if (startMarker) map.removeLayer(startMarker);
+            
+            // Створюємо новий стартовий маркер
+            startMarker = L.marker([e.latlng.lat, e.latlng.lng], {
+                icon: L.divIcon({
+                    className: 'custom-icon',
+                    html: '<div style="background: #22c55e; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white;"></div>',
+                    iconSize: [20, 20]
+                })
+            }).addTo(map).bindPopup(`<b>Початкова точка</b><br>
+                Lat: ${e.latlng.lat.toFixed(6)}<br>
+                Lng: ${e.latlng.lng.toFixed(6)}`);
+            
+            calculate();
+        });
+
+        elements.windDir.addEventListener('input', updateValues);
+        elements.windSpeed.addEventListener('input', updateValues);
+        elements.battery.addEventListener('input', updateValues);
+
+        updateValues();
+    </script>
+</body>
+</html>
