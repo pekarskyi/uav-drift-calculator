@@ -148,6 +148,22 @@
             font-size: 0.85em;
         }
 
+        .copyright-box {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .copyright-box a {
+            color: #FFF;
+        }
+        
+        .copyright-box a:hover {
+            color: #FFD679;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.5em;
@@ -213,8 +229,11 @@
             ℹ️ Метеорологічний напрямок показує ЗВІДКИ дме вітер. Вітер 90° дме ЗІ Сходу НА Захід.
         </div>
 
-        Сторінка скрипта
-Автор Reset, v.1.0.0
+        <div class="copyright-box">
+			<div class="copyright-box_link"><a href="https://github.com/pekarskyi/uav-drift-calculator">Сторінка скрипта</a></div>
+			<div class="copyright-box_author">Автор <a href="https://github.com/pekarskyi/">Reset</a>, v.1.0.0</div>
+		</div>
+        
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -474,3 +493,4 @@
 </body>
 
 </html>
+
